@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -54,6 +56,25 @@ func activateCommand(args []string, stdout, stderr io.Writer) int {
 	if *scope != "project" && *scope != "user" {
 		fmt.Fprintf(stderr, "flowsync activate: unknown scope %q\n", *scope)
 		return 2
+	}
+
+	// If activating a project, create a local .flowsync directory so
+	// journal and checkpoint storage can be placed inside the project.
+	if *scope == "project" {
+		wd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintf(stderr, "flowsync activate: get working dir: %v\n", err)
+			return 1
+		}
+		local := filepath.Join(wd, ".flowsync")
+		if err := os.MkdirAll(local, 0o700); err != nil {
+			fmt.Fprintf(stderr, "flowsync activate: create %s: %v\n", local, err)
+			return 1
+		}
+		if err := os.Chmod(local, 0o700); err != nil {
+			fmt.Fprintf(stderr, "flowsync activate: chmod %s: %v\n", local, err)
+			return 1
+		}
 	}
 
 	for _, harness := range harnesses {

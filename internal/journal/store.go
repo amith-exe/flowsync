@@ -75,6 +75,13 @@ func (s Store) ProjectDir(workingDir string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+
+	// Prefer a local .flowsync folder inside the working dir if present.
+	localRoot := filepath.Join(resolved, ".flowsync")
+	if info, err := os.Stat(localRoot); err == nil && info.IsDir() {
+		return filepath.Join(localRoot, "projects", hash), resolved, nil
+	}
+
 	root, err := s.root()
 	if err != nil {
 		return "", "", err

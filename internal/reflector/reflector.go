@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	DefaultCommand     = "claude"
-	DefaultModel       = "claude-cli-default"
+	DefaultCommand     = "ollama"
+	DefaultModel       = "qwen2.5-coder:7b"
 	ReflectorActiveEnv = "THREADMARK_REFLECTOR_ACTIVE"
 )
 
