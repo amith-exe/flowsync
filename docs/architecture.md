@@ -18,3 +18,35 @@ Security and filesystem layout
 
 - Project-specific storage prefers `<repo>/.flowsync` when present; otherwise `~/.flowsync` is used.
 - Files and directories are created with strict permissions (0700/0600) to protect sensitive data.
+
+Architecture diagram
+
+```mermaid
+flowchart LR
+	subgraph Local
+		User[User / Harness]
+		HookScript[Hook Script\nadapters/*]
+		RepoFlowsync[<repo>/.flowsync]
+	end
+
+	subgraph DaemonRoot[Daemon Root (~/.flowsync)]
+		Daemon[flowsyncd]\n(ingest, checkpoint, journal)
+		JournalStore[(projects/<hash>/journal.md)]
+		CheckpointLogs[(checkpoint-logs/*)]
+		Reflector[internal/reflector\n(ollama or other)]
+	end
+
+	User --> HookScript -->|call| Daemon
+	HookScript -->|optionally runs| RepoFlowsync
+	Daemon --> JournalStore
+	Daemon --> CheckpointLogs
+	Daemon --> Reflector
+	Reflector -->|writes summary| JournalStore
+	RepoFlowsync -->|preferred storage| JournalStore
+
+	style RepoFlowsync fill:#f9f,stroke:#333,stroke-width:1px
+	style Daemon fill:#efe,stroke:#333,stroke-width:1px
+	style Reflector fill:#eef,stroke:#333,stroke-width:1px
+```
+
+The diagram shows how hooks from a harness (Codex/Claude) or direct CLI calls feed events into the daemon. The daemon writes checkpoint excerpts and appends journal entries; it may call the `internal/reflector` to summarize or transform events using the configured LLM. When a project's local `.flowsync` exists, storage is placed next to the repo, otherwise the global `~/.flowsync` root is used.
