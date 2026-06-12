@@ -1,6 +1,7 @@
 # Installation
 
 Prerequisites
+
 - Go (1.20+) for building from source.
 - `ollama` if you plan to use the default reflector locally.
 - Optional: `direnv` for per-project auto-activation.
@@ -23,8 +24,10 @@ flowsync daemon status
 ```
 
 Windows + WSL notes
+
 - Prefer running the daemon inside WSL for tight Unix-socket and tooling integration.
 - When running in PowerShell, use `wsl` to run helper scripts or `flowsync` installed inside WSL.
 
 Installing Ollama (optional)
+
 - Follow Ollama's install instructions for your OS. Ensure the `ollama` binary is on your PATH.

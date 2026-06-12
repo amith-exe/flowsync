@@ -3,6 +3,7 @@
 This `docs/` folder contains comprehensive documentation for FlowSync: installation, usage, activation, development, architecture, and CLI reference.
 
 Content
+
 - `installation.md` — system requirements and install steps for Windows/WSL and Linux/macOS.
 - `quickstart.md` — an opinionated quickstart to get the daemon running and produce a journal entry.
 - `activate.md` — project activation and auto-activation options (direnv, git-template).

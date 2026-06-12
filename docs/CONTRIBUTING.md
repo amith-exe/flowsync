@@ -9,7 +9,9 @@ Thanks for wanting to contribute to FlowSync! Please follow these guidelines:
 5. Add documentation to `docs/` for new user-facing behavior.
 
 Code style
+
 - Use idiomatic Go (gofmt, vet). Avoid global side-effects.
 
 License
+
 - This project uses the LICENSE in the repository root.
