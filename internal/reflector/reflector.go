@@ -147,21 +147,44 @@ func (c *Client) Reflect(ctx context.Context, request Request) (Response, error)
 	}
 	promptHash := PromptHash(systemPrompt)
 	prompt := BuildPrompt(systemPrompt, request)
-	args := c.args(prompt)
 
 	startedAt := time.Now().UTC()
-	body, err := c.config.Runner.Run(ctx, c.config.Command, args)
-	if err != nil {
-		return Response{}, err
+	var body string
+	var runErr error
+	// If the configured command is `ollama`, write the built prompt to a tempfile
+	// and invoke: `ollama run <model> --prompt-file <tmp>` so local Ollama models
+	// can be used as the reflector backend.
+	if strings.TrimSpace(filepath.Base(c.config.Command)) == "ollama" || strings.TrimSpace(c.config.Command) == "ollama" {
+		tmpf, err := os.CreateTemp("", "flowsync-prompt-*.txt")
+		if err != nil {
+			return Response{}, fmt.Errorf("create prompt tempfile: %w", err)
+		}
+		if _, err := tmpf.WriteString(prompt); err != nil {
+			_ = tmpf.Close()
+			_ = os.Remove(tmpf.Name())
+			return Response{}, fmt.Errorf("write prompt tempfile: %w", err)
+		}
+		_ = tmpf.Close()
+		defer os.Remove(tmpf.Name())
+
+		args := []string{"run", c.config.Model, "--prompt-file", tmpf.Name()}
+		body, runErr = c.config.Runner.Run(ctx, c.config.Command, args)
+	} else {
+		args := c.args(prompt)
+		body, runErr = c.config.Runner.Run(ctx, c.config.Command, args)
+	}
+	if runErr != nil {
+		return Response{}, runErr
 	}
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return Response{}, errors.New("reflector returned empty body")
 	}
 
+	backend := c.config.Command
 	return Response{
 		Body:        body,
-		Backend:     "claude-code",
+		Backend:     backend,
 		CommandMode: c.config.Mode,
 		Model:       c.config.Model,
 		PromptHash:  promptHash,

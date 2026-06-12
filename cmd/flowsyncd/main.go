@@ -35,6 +35,7 @@ func main() {
 	reflectorModel := flag.String("reflector-model", reflector.DefaultModel, "reflector model metadata")
 	reflectorTimeout := flag.Duration("reflector-timeout", envDuration("THREADMARK_REFLECTOR_TIMEOUT", 2*time.Minute), "maximum time for a reflector call or queue wait; 0 disables timeout")
 	reflectorConcurrency := flag.Int("reflector-concurrency", envInt("THREADMARK_REFLECTOR_CONCURRENCY", 1), "maximum concurrent reflector calls")
+	checkpointLogDir := flag.String("checkpoint-log-dir", envDefault("THREADMARK_CHECKPOINT_LOG_DIR", ""), "directory to write checkpoint excerpts (optional)")
 	checkpointRetryInitialBackoff := flag.Duration("checkpoint-retry-initial-backoff", envDuration("THREADMARK_CHECKPOINT_RETRY_INITIAL_BACKOFF", 30*time.Second), "initial backoff before retrying a failed checkpoint")
 	checkpointRetryMaxBackoff := flag.Duration("checkpoint-retry-max-backoff", envDuration("THREADMARK_CHECKPOINT_RETRY_MAX_BACKOFF", 5*time.Minute), "maximum backoff between failed checkpoint retries")
 	noJournal := flag.Bool("no-journal", envBool("THREADMARK_NO_JOURNAL"), "disable reflector and journal writes")
@@ -98,6 +99,7 @@ func main() {
 		noJournal:        *noJournal,
 		reflectorTimeout: *reflectorTimeout,
 		reflectorSlots:   make(chan struct{}, max(1, *reflectorConcurrency)),
+		checkpointLogDir: *checkpointLogDir,
 	}
 	checkpointRetries := newCheckpointRetrier(ctx, ingestor, checkpoints, logger, *checkpointRetryInitialBackoff, *checkpointRetryMaxBackoff)
 
@@ -295,12 +297,46 @@ type checkpointHandler struct {
 	noJournal        bool
 	reflectorTimeout time.Duration
 	reflectorSlots   chan struct{}
+	checkpointLogDir string
 }
 
 func (h checkpointHandler) Handle(ctx context.Context, result daemon.IngestResult) error {
 	checkpoint := result.Result.Checkpoint
 	if checkpoint == nil {
 		return nil
+	}
+	// Persist raw excerpt for audit/consumers if available.
+	if strings.TrimSpace(result.Excerpt) != "" {
+		// Destination dir: explicit flag wins, otherwise use the project's journal directory.
+		destDir := h.checkpointLogDir
+		if strings.TrimSpace(destDir) == "" {
+			if journalPath, _, err := h.store.JournalPath(checkpoint.WorkingDir); err == nil {
+				destDir = filepath.Dir(journalPath)
+			}
+		}
+		if destDir != "" {
+			if err := os.MkdirAll(destDir, 0o700); err != nil {
+				_ = h.logger.LogError(fmt.Errorf("create checkpoint log dir: %w", err))
+			} else {
+				ts := time.Now().UTC().Format("20060102T150405Z")
+				safeThread := strings.ReplaceAll(checkpoint.ThreadID, "/", "_")
+				fname := fmt.Sprintf("%s_%s_%s.txt", result.ProjectHash, ts, safeThread)
+				tmpf, err := os.CreateTemp(destDir, fname+".tmp.*")
+				if err != nil {
+					_ = h.logger.LogError(fmt.Errorf("create checkpoint tmp file: %w", err))
+				} else {
+					if _, err := tmpf.WriteString(result.Excerpt); err != nil {
+						_ = h.logger.LogError(fmt.Errorf("write checkpoint tmp file: %w", err))
+					}
+					_ = tmpf.Close()
+					_ = os.Chmod(tmpf.Name(), 0o600)
+					finalPath := filepath.Join(destDir, fname)
+					if err := os.Rename(tmpf.Name(), finalPath); err != nil {
+						_ = h.logger.LogError(fmt.Errorf("rename checkpoint tmp file: %w", err))
+					}
+				}
+			}
+		}
 	}
 	if h.noJournal {
 		return h.logger.LogJournalSkipped(result.ProjectHash, checkpoint.ThreadID, checkpoint.Trigger.Reason)
