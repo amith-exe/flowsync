@@ -67,9 +67,7 @@ Documentation
 
 - See the `docs/` folder for detailed guides: `docs/quickstart.md`, `docs/installation.md`, `docs/activate.md`, `docs/usage.md`, `docs/cli-reference.md`, `docs/architecture.md`, and `docs/development.md`.
 
-Contributing
 
-- See `docs/CONTRIBUTING.md` for development and contribution guidelines.
 
 License
 
